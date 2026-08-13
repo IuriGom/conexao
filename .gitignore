@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+
+# Flutter / Dart
+app/.dart_tool/
+app/.packages
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/pubspec.lock.overrides
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Data pipeline scratch / large artifacts (never commit packs or extracts)
+pipeline/tmp/
+pipeline/out/
+*.pack
+*.pmtiles
+*.osm.pbf
+
+# Signing keys (public key is committed deliberately; secret key never)
+*.sec
+minisign.key
+
+# Editors
+.idea/
+.vscode/

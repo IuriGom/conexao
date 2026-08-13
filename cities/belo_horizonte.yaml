@@ -1,0 +1,53 @@
+# City configuration: Belo Horizonte (MG) — PIPELINE REFERENCE CITY
+# Chosen as the reference because its data is the simplest in Brazil:
+# CC-BY license, no auth, positions refreshed every ~20 s.
+# Rule (plan §9A.3): changes to this file are ALWAYS human-reviewed.
+
+id: belo_horizonte
+name: Belo Horizonte
+region: Minas Gerais
+country: BR
+timezone: America/Sao_Paulo
+
+bbox: [-44.15, -20.10, -43.80, -19.72]   # draft — verify in Phase 1
+
+feeds:
+  - id: bhtrans-bus
+    mode: bus                            # conventional + MOVE (BRT) + supplementary
+    # CKAN portal; resolve the current GTFS zip resource URL in Phase 1:
+    url: https://dados.pbh.gov.br/dataset/?tags=ONIBUS
+    provenance: official
+    status: available                    # verify exact resource URL + freshness in Phase 1
+
+  # Metrô BH (Linha 1, Eldorado–Vilarinho): no official open GTFS.
+  # Check Mobility Database for community feeds in Phase 1; stations are in OSM.
+  - id: metro-bh
+    mode: subway
+    url: null
+    provenance: community
+    status: to_find
+
+live:
+  - id: bhtrans-positions
+    type: json                           # also CSV; refreshed ~every 20 s
+    # Resolve exact endpoint from the dados.pbh.gov.br ônibus datasets in Phase 1:
+    url: https://dados.pbh.gov.br/dataset/?tags=ONIBUS
+    auth: none
+    license: CC-BY-4.0
+  - id: bhtrans-gtfs-rt
+    type: gtfs-rt                        # vehicle positions + service alerts
+    url: null                            # resolve in Phase 1
+    auth: none
+    license: CC-BY-4.0
+
+license: CC-BY-4.0
+attribution: >
+  Empresa de Transportes e Trânsito de Belo Horizonte (BHTrans), dados abertos
+  PBH (CC-BY-4.0). OpenStreetMap contributors (ODbL).
+
+status:
+  coverage: live_planned
+  badge: LIVE
+  notes: >
+    Reference city for the pack pipeline and the first live adapter
+    (easiest integration: open, keyless, 20 s refresh).
