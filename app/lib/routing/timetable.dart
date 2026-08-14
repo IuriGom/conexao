@@ -14,7 +14,13 @@ class Timetable {
   final List<Connection> connections;
 
   /// tripI -> ordered (stopI, arrSecs, depSecs) for journey reconstruction.
+  /// May be empty when [depAtProvider] is set (large packs look up
+  /// departure times lazily from SQLite instead of holding them in RAM).
   final Map<int, List<(int, int, int)>> tripStopTimes;
+
+  /// Optional lazy (tripI, stopI) -> departureSecs lookup, e.g. backed by
+  /// the pack SQLite. Takes precedence over [tripStopTimes].
+  final int? Function(int tripI, int stopI)? depAtProvider;
 
   /// Walking edges between nearby stops: stopI -> [(toI, walkSecs)].
   final Map<int, List<(int, int)>> footpaths;
@@ -31,6 +37,7 @@ class Timetable {
     required this.trips,
     required List<Connection> connections,
     required this.tripStopTimes,
+    this.depAtProvider,
     required this.footpaths,
     required this.activeServices,
     double gridCellDeg = 0.005, // ~500 m

@@ -169,6 +169,8 @@ class CsaRouter {
   /// connection's departure. The board stop may precede the first
   /// arrival-improving connection of the trip.
   int _depAt(int tripI, int stopI, int fallback) {
+    final lazy = tt.depAtProvider;
+    if (lazy != null) return lazy(tripI, stopI) ?? fallback;
     final st = tt.tripStopTimes[tripI] ?? const <(int, int, int)>[];
     for (final row in st) {
       if (row.$1 == stopI) return row.$3;

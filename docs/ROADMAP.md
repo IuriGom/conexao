@@ -32,9 +32,12 @@ part-time with AI assistance, plan on **6–12 months to v1.0 Android**.
       (BH, 113k trips): queries 25–55 ms ✅, but **max 1 transfer and no
       time-aware itineraries** — parse-from-zip 27 s also unsuitable for
       app startup
-- [ ] Decision shaping: reuse Trufi's GTFS models/parser + spatial/route
-      indexes; write the time-aware multi-transfer core (Dart CSA over our
-      pack SQLite) per plan fallback path §4.1b — finalize after SP-scale test
+- [x] Decision: reuse Trufi's GTFS models/parser + spatial/route indexes;
+      **own time-aware core written**: `app/lib/routing/` — CSA with unlimited
+      transfers, footpath transfers, service-day filtering, honest
+      approximate labeling. Real BH pack: load 14.5 s (TODO: isolate +
+      precomputed connections), queries 230–315 ms, plausible multimodal
+      journeys
 - [ ] Golden-route tests: 10 known A→B pairs per city
 - **Deliverable:** offline multimodal A→B planning, <2 s on mid-range phone
 
