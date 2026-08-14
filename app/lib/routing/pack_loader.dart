@@ -3,6 +3,15 @@ import 'package:sqlite3/sqlite3.dart';
 import 'models.dart';
 import 'timetable.dart';
 
+/// One hit from the pack's FTS5 search index.
+class SearchHit {
+  final String kind; // 'stop' | 'route'
+  final int refI;
+  final String name;
+
+  const SearchHit({required this.kind, required this.refI, required this.name});
+}
+
 /// Loads a city pack (produced by pipeline/compile_gtfs.py) into an
 /// in-memory [Timetable] for one service day.
 ///
@@ -23,6 +32,39 @@ class PackLoader {
   String? get cityId {
     final r = db.select("SELECT value FROM meta WHERE key='city_id'");
     return r.isEmpty ? null : r.first['value'] as String?;
+  }
+
+  /// Looks up a single stop by its pack id (used after FTS search).
+  StopNode? stopByI(int stopI) {
+    final r = db.select(
+        'SELECT stop_i, name, lat, lon FROM stops WHERE stop_i = ?',
+        [stopI]);
+    if (r.isEmpty) return null;
+    final row = r.first;
+    return StopNode(row['stop_i'] as int, (row['name'] as String?) ?? '',
+        (row['lat'] as double?) ?? 0, (row['lon'] as double?) ?? 0);
+  }
+
+  /// Full-text search over stops and routes (FTS5 index built by the  /// compiler; trigram when available = substring matching).
+  /// Query terms are quoted, so arbitrary user input can't break FTS syntax.
+  List<SearchHit> search(String query, {int limit = 20}) {
+    final terms = query
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .map((t) => '"${t.replaceAll('"', ' ')}"')
+        .join(' ');
+    if (terms.isEmpty) return const [];
+    return [
+      for (final r in db.select(
+          'SELECT kind, ref_i, name FROM search '
+          'WHERE search MATCH ? LIMIT ?', [terms, limit]))
+        SearchHit(
+          kind: r['kind'] as String,
+          refI: r['ref_i'] as int,
+          name: r['name'] as String,
+        ),
+    ];
   }
 
   /// Service ids active on [day] per calendar.txt + calendar_dates.txt.
@@ -56,7 +98,14 @@ class PackLoader {
   }
 
   /// Builds the full routing timetable for [day].
-  Timetable loadForDay(DateTime day, {double footpathMaxMeters = 400}) {
+  ///
+  /// [lazyDepAt] keeps a prepared statement for journey reconstruction.
+  /// Set it to false when the Timetable must cross an isolate boundary
+  /// (closures over native resources cannot be transferred); reconstruction
+  /// then falls back to connection departure times, which differ only in
+  /// rare board-earlier-than-first-improvement cases.
+  Timetable loadForDay(DateTime day,
+      {double footpathMaxMeters = 400, bool lazyDepAt = true}) {
     final services = activeServices(day);
 
     final stops = <int, StopNode>{};
@@ -115,19 +164,23 @@ class PackLoader {
       stmt.dispose();
     }
 
-    final depStmt = db.prepare(
-        'SELECT departure_secs FROM stop_times '
-        'WHERE trip_i = ? AND stop_i = ? LIMIT 1');
+    int? Function(int, int)? depAtProvider;
+    if (lazyDepAt) {
+      final depStmt = db.prepare(
+          'SELECT departure_secs FROM stop_times '
+          'WHERE trip_i = ? AND stop_i = ? LIMIT 1');
+      depAtProvider = (tripI, stopI) {
+        final r = depStmt.select([tripI, stopI]);
+        return r.isEmpty ? null : r.first['departure_secs'] as int?;
+      };
+    }
 
     return Timetable(
       stops: stops,
       trips: trips,
       connections: connections,
       tripStopTimes: const {},
-      depAtProvider: (tripI, stopI) {
-        final r = depStmt.select([tripI, stopI]);
-        return r.isEmpty ? null : r.first['departure_secs'] as int?;
-      },
+      depAtProvider: depAtProvider,
       footpaths: Timetable.buildFootpaths(stops,
           maxWalkMeters: footpathMaxMeters),
       activeServices: services,
