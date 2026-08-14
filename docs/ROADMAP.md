@@ -15,11 +15,15 @@ part-time with AI assistance, plan on **6–12 months to v1.0 Android**.
 - [ ] Draft privacy policy (PT-BR)
 
 ## Phase 1 — Data pack pipeline (3–4 wks FTE)
-- `compile_gtfs.py`: GTFS → SQLite + FTS5; materialize frequencies.txt
-- PMTiles per city bbox (Geofabrik → Planetiler in CI)
-- ed25519 pack + catalog signing
-- Weekly GitHub Actions → Release `data-YYYY.WW` + `catalog.json`
-- In-app pack manager: download, verify signature, atomic apply + rollback
+- [x] `compile_gtfs.py` v1: GTFS → SQLite + FTS5; frequencies.txt
+      materialized into explicit trips; blocking quality gate; untrusted-input
+      guards — tested offline against a synthetic feed (14 checks green)
+- [ ] App shell v0: PT-BR city picker + honest badges (done, on emulator)
+- [ ] PMTiles per city bbox (Geofabrik → Planetiler in CI)
+- [ ] ed25519 pack + catalog signing
+- [ ] Weekly GitHub Actions → Release `data-YYYY.WW` + `catalog.json`
+- [ ] In-app pack manager: download, verify signature, atomic apply + rollback
+- [ ] Compile against the real Belo Horizonte feed (needs Wi-Fi: ~10 MB)
 - **Deliverable:** app downloads Belo Horizonte pack, browses fully offline;
   Brasília Metrô-DF community feed encoded
 
