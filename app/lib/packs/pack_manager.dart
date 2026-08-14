@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 
 /// Minimal on-device pack storage. Packs live in app-private storage:
@@ -18,6 +19,34 @@ class PackManager {
     final dir = await packsDir();
     final f = File('${dir.path}/$cityId.sqlite');
     return f.existsSync() ? f : null;
+  }
+
+  /// The offline map pack for a city.
+  Future<File?> mapFile(String cityId) async {
+    final dir = await packsDir();
+    final f = File('${dir.path}/$cityId.pmtiles');
+    return f.existsSync() ? f : null;
+  }
+
+  /// Copies the bundled font glyph ranges to app storage so MapLibre can
+  /// read them via file:// (assets aren't real files on Android).
+  /// Returns the directory for style 'glyphs' templates.
+  Future<Directory> ensureGlyphs() async {
+    final support = await getApplicationSupportDirectory();
+    final dir = Directory('${support.path}/glyphs');
+    const stack = 'Noto Sans Regular';
+    const ranges = ['0-255', '256-511', '8192-8447', '12288-12543'];
+    final stackDir = Directory('${dir.path}/$stack');
+    await stackDir.create(recursive: true);
+    for (final r in ranges) {
+      final out = File('${stackDir.path}/$r.pbf');
+      if (!out.existsSync()) {
+        final data = await rootBundle
+            .load('assets/glyphs/$stack/$r.pbf');
+        await out.writeAsBytes(data.buffer.asUint8List());
+      }
+    }
+    return dir;
   }
 
   Future<List<String>> installedCities() async {

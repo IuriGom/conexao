@@ -1,30 +1,42 @@
 import 'package:flutter/material.dart';
 
+import '../map/map_screen.dart';
+import '../map/offline_style.dart';
 import '../packs/pack_manager.dart';
 import '../routing/models.dart';
-import '../routing/pack_loader.dart';
 import '../routing/router_worker.dart';
 import 'journey_view.dart';
 
-/// A->B trip planning, fully offline: stops come from the pack's FTS index,
-/// the journey from the on-device CSA engine. No network call is made.
+/// Map-first trip planning (Google-Maps style): tap the map to drop the
+/// origin pin, tap again for the destination, then Planejar. Everything is
+/// offline — tiles from the local PMTiles pack, routing on-device via CSA.
 class PlannerScreen extends StatefulWidget {
   final String cityId;
-  const PlannerScreen({super.key, required this.cityId});
+  final double centerLat, centerLon;
+
+  const PlannerScreen({
+    super.key,
+    required this.cityId,
+    required this.centerLat,
+    required this.centerLon,
+  });
 
   @override
   State<PlannerScreen> createState() => _PlannerScreenState();
 }
 
 class _PlannerScreenState extends State<PlannerScreen> {
-  PackLoader? _loader;
-  RouterWorker? _worker;
+  String? _styleJson;
   String? _packPath;
+  RouterWorker? _worker;
   bool _dayLoaded = false;
   bool _packMissing = false;
-  bool _loadingDay = false;
+  bool _mapMissing = false;
+  bool _busy = false;
+
+  MapPin? _origin, _dest;
   Journey? _journey;
-  bool _searched = false;
+  bool _noResult = false;
 
   @override
   void initState() {
@@ -33,48 +45,73 @@ class _PlannerScreenState extends State<PlannerScreen> {
   }
 
   Future<void> _openPack() async {
-    final f = await PackManager().packFile(widget.cityId);
+    final pm = PackManager();
+    final transit = await pm.packFile(widget.cityId);
+    final map = await pm.mapFile(widget.cityId);
     if (!mounted) return;
-    if (f == null) {
+    if (transit == null) {
       setState(() => _packMissing = true);
       return;
     }
-    _packPath = f.path;
-    _loader = PackLoader(f.path);
+    _packPath = transit.path;
     _worker = await RouterWorker.spawn();
-    if (mounted) setState(() {});
+    if (map == null) {
+      setState(() => _mapMissing = true);
+      return;
+    }
+    final glyphs = await pm.ensureGlyphs();
+    final style =
+        await OfflineStyle.build(pmtilesPath: map.path, glyphsDir: glyphs.path);
+    if (mounted) setState(() => _styleJson = style);
   }
 
-  Future<void> _plan(StopNode origin, StopNode dest) async {
+  void _onTapMap(double lat, double lon) {
+    setState(() {
+      _journey = null;
+      if (_origin == null) {
+        _origin = MapPin(lat, lon, '#2E7D32'); // green
+      } else {
+        _dest = MapPin(lat, lon, '#C62828'); // red
+      }
+    });
+  }
+
+  Future<void> _plan() async {
+    final o = _origin, d = _dest;
+    if (o == null || d == null) return;
+    setState(() {
+      _busy = true;
+      _journey = null;
+    });
     if (!_dayLoaded) {
-      setState(() => _loadingDay = true);
-      // The worker isolate builds the day's timetable off the UI thread
-      // and keeps it resident for subsequent queries.
       await _worker!.loadDay(_packPath!, DateTime.now());
       if (!mounted) return;
-      setState(() {
-        _dayLoaded = true;
-        _loadingDay = false;
-      });
+      _dayLoaded = true;
     }
     final now = DateTime.now();
-    final depSecs = now.hour * 3600 + now.minute * 60 + now.second;
     final journey = await _worker!.route(
-      originLat: origin.lat, originLon: origin.lon,
-      destLat: dest.lat, destLon: dest.lon,
-      departureSecs: depSecs,
+      originLat: o.lat, originLon: o.lon,
+      destLat: d.lat, destLon: d.lon,
+      departureSecs: now.hour * 3600 + now.minute * 60 + now.second,
     );
     if (!mounted) return;
     setState(() {
       _journey = journey;
-      _searched = true;
+      _busy = false;
+      _noResult = journey == null;
     });
   }
+
+  void _clear() => setState(() {
+        _origin = null;
+        _dest = null;
+        _journey = null;
+        _noResult = false;
+      });
 
   @override
   void dispose() {
     _worker?.close();
-    _loader?.close();
     super.dispose();
   }
 
@@ -93,135 +130,88 @@ class _PlannerScreenState extends State<PlannerScreen> {
         ),
       );
     }
-    if (_loader == null) {
+    if (_mapMissing) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Text(
+            'Mapa offline não encontrado (packs/<cidade>.pmtiles).',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    if (_styleJson == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    return Column(
+
+    final pins = [?_origin, ?_dest];
+    return Stack(
       children: [
-        ConstrainedBox(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.55),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-            children: [
-              _StopPicker(
-                label: 'Origem',
-                loader: _loader!,
-                onSelected: (s) => _origin = s,
-              ),
-              const SizedBox(height: 8),
-              _StopPicker(
-                label: 'Destino',
-                loader: _loader!,
-                onSelected: (s) => _dest = s,
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _loadingDay
-                      ? null
-                      : () {
-                          final o = _origin, d = _dest;
-                          if (o != null && d != null) _plan(o, d);
-                        },
-                  icon: const Icon(Icons.route),
-                  label: Text(_loadingDay
-                      ? 'Carregando horários do dia…'
-                      : 'Planejar'),
-                ),
-              ),
-            ],
-          ),
+        TransitMap(
+          styleJson: _styleJson!,
+          centerLat: widget.centerLat,
+          centerLon: widget.centerLon,
+          pins: pins,
+          onTap: _onTapMap,
         ),
-        ),
-        if (_loadingDay) const LinearProgressIndicator(),
-        Expanded(
-          child: ListView(
-            children: [
-              if (_journey != null) JourneyView(journey: _journey!),
-              if (_searched && _journey == null)
-                const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text(
-                    'Nenhum itinerário encontrado.\n'
-                    'Tente outro horário ou paradas mais próximas.',
-                    textAlign: TextAlign.center,
+        // Status + actions
+        Positioned(
+          top: 8, left: 8, right: 8,
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _origin == null
+                          ? 'Toque no mapa para marcar a origem'
+                          : _dest == null
+                              ? 'Agora toque para marcar o destino'
+                              : 'Origem e destino marcados',
+                      style: const TextStyle(fontSize: 13),
+                    ),
                   ),
-                ),
-            ],
+                  TextButton(onPressed: _clear, child: const Text('Limpar')),
+                  FilledButton(
+                    onPressed: (_origin != null && _dest != null && !_busy)
+                        ? _plan
+                        : null,
+                    child: Text(_busy ? '…' : 'Planejar'),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-      ],
-    );
-  }
-
-  StopNode? _origin;
-  StopNode? _dest;
-}
-
-class _StopPicker extends StatefulWidget {
-  final String label;
-  final PackLoader loader;
-  final ValueChanged<StopNode> onSelected;
-
-  const _StopPicker({
-    required this.label,
-    required this.loader,
-    required this.onSelected,
-  });
-
-  @override
-  State<_StopPicker> createState() => _StopPickerState();
-}
-
-class _StopPickerState extends State<_StopPicker> {
-  final _controller = TextEditingController();
-  List<SearchHit> _hits = [];
-  StopNode? _selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _controller,
-          decoration: InputDecoration(
-            labelText: widget.label,
-            border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: _selected != null
-                ? const Icon(Icons.check_circle, color: Colors.green)
-                : null,
+        if (_busy)
+          const Positioned(
+            top: 72, left: 8, right: 8,
+            child: LinearProgressIndicator(),
           ),
-          onChanged: (q) {
-            setState(() {
-              _selected = null;
-              _hits = q.trim().length >= 2
-                  ? widget.loader
-                      .search(q)
-                      .where((h) => h.kind == 'stop')
-                      .toList()
-                  : [];
-            });
-          },
-        ),
-        for (final hit in _hits.take(5))
-          ListTile(
-            dense: true,
-            title: Text(hit.name),
-            onTap: () async {
-              final stop = widget.loader.stopByI(hit.refI);
-              if (stop == null) return;
-              setState(() {
-                _selected = stop;
-                _hits = [];
-                _controller.text = stop.name;
-              });
-              widget.onSelected(stop);
-            },
+        // Result
+        if (_journey != null)
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.45),
+              child: SingleChildScrollView(
+                child: JourneyView(journey: _journey!),
+              ),
+            ),
+          ),
+        if (_noResult)
+          const Positioned(
+            left: 0, right: 0, bottom: 24,
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Nenhum itinerário encontrado. '
+                    'Tente pontos mais próximos da malha.'),
+              ),
+            ),
           ),
       ],
     );
