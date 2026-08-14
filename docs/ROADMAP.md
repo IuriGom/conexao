@@ -28,9 +28,14 @@ part-time with AI assistance, plan on **6–12 months to v1.0 Android**.
   Brasília Metrô-DF community feed encoded
 
 ## Phase 2 — On-device routing (2–6 wks FTE) — decision gate
-- Evaluate Trufi Core v5 offline GTFS planner on a big pack
-- Adopt-and-harden, or Dart CSA port (Mobroute as reference)
-- Golden-route tests: 10 known A→B pairs per city
+- [x] Evaluate Trufi Core v5 offline GTFS planner on a real feed
+      (BH, 113k trips): queries 25–55 ms ✅, but **max 1 transfer and no
+      time-aware itineraries** — parse-from-zip 27 s also unsuitable for
+      app startup
+- [ ] Decision shaping: reuse Trufi's GTFS models/parser + spatial/route
+      indexes; write the time-aware multi-transfer core (Dart CSA over our
+      pack SQLite) per plan fallback path §4.1b — finalize after SP-scale test
+- [ ] Golden-route tests: 10 known A→B pairs per city
 - **Deliverable:** offline multimodal A→B planning, <2 s on mid-range phone
 
 ## Phase 3 — Live layer (4–5 wks FTE)

@@ -42,9 +42,9 @@ FEED = {
         "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
         "T_BUS_1,08:00:00,08:00:00,S1,1\n"
         "T_BUS_1,08:12:00,08:12:00,S2,2\n"
-        "T_BUS_1,25:05:00,25:05:00,S2,3\n"
+        "T_BUS_1,25:05:00,25:07:00,S2,3\n"
         "T_METRO_FREQ,06:00:00,06:00:00,M1P,1\n"
-        "T_METRO_FREQ,06:20:00,06:20:00,M2,2\n"
+        "T_METRO_FREQ,06:20:00,06:21:00,M2,2\n"
     ),
     "calendar.txt": (
         "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"
@@ -105,16 +105,27 @@ def main():
           q("SELECT COUNT(*) FROM trips WHERE trip_id='T_METRO_FREQ'"), 0)
     check("freq_exact=0 kept for honest labeling",
           q("SELECT freq_exact FROM trips WHERE trip_id LIKE 'T_METRO_FREQ#%' LIMIT 1"), 0)
+    check("parent_station mapped to int",
+          q("SELECT parent_i FROM stops WHERE stop_id='M1P'"),
+          q("SELECT stop_i FROM stops WHERE stop_id='M1'"))
     check("stop_times for one freq trip",
-          q("SELECT COUNT(*) FROM stop_times WHERE trip_id='T_METRO_FREQ#21600'"), 2)
-    check("freq stop_times shifted (+20 min at 06:00 -> arrival 06:20 = 22800)",
-          q("SELECT arrival_secs FROM stop_times "
-            "WHERE trip_id='T_METRO_FREQ#21600' AND stop_sequence=2"), 22800)
+          q("SELECT COUNT(*) FROM stop_times st JOIN trips t USING (trip_i) "
+            "WHERE t.trip_id='T_METRO_FREQ#21600'"), 2)
+    check("freq stop_times shifted (arrival 06:20 = 22800)",
+          q("SELECT st.arrival_secs FROM stop_times st "
+            "JOIN trips t USING (trip_i) "
+            "WHERE t.trip_id='T_METRO_FREQ#21600' AND st.stop_sequence=2"),
+          22800)
+    check("arr == dep stored as NULL (read with COALESCE)",
+          q("SELECT COALESCE(st.arrival_secs, st.departure_secs) "
+            "FROM stop_times st JOIN trips t USING (trip_i) "
+            "WHERE t.trip_id='T_BUS_1' AND st.stop_sequence=1"), 28800)
     check("25h time stored as 90300 secs",
-          q("SELECT arrival_secs FROM stop_times "
-            "WHERE trip_id='T_BUS_1' AND stop_sequence=3"), 90300)
+          q("SELECT st.arrival_secs FROM stop_times st "
+            "JOIN trips t USING (trip_i) "
+            "WHERE t.trip_id='T_BUS_1' AND st.stop_sequence=3"), 90300)
     check("calendar", q("SELECT COUNT(*) FROM calendar"), 1)
-    check("shapes", q("SELECT COUNT(*) FROM shapes"), 2)
+    check("shape_pts", q("SELECT COUNT(*) FROM shape_pts"), 2)
     check("search: 'Rodoviária' matches stop + route",
           q("SELECT COUNT(*) FROM search WHERE search MATCH 'Rodoviária'"), 2)
     check("search: route by number",

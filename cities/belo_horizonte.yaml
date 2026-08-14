@@ -14,10 +14,11 @@ bbox: [-44.15, -20.10, -43.80, -19.72]   # draft — verify in Phase 1
 feeds:
   - id: bhtrans-bus
     mode: bus                            # conventional + MOVE (BRT) + supplementary
-    # CKAN portal; resolve the current GTFS zip resource URL in Phase 1:
-    url: https://dados.pbh.gov.br/dataset/?tags=ONIBUS
+    # Resolved 2026-08-14 via dados.pbh.gov.br CKAN API (feed updated 2026-08-13):
+    url: https://s3.amazonaws.com/mobilibus-uploads/gtfs/GTFSBHTRANS.zip
     provenance: official
-    status: available                    # verify exact resource URL + freshness in Phase 1
+    status: verified                     # compiles clean: 9,927 stops, 326 routes,
+                                         # 113,692 trips, 6.67M stop_times -> 65 MB pack
 
   # Metrô BH (Linha 1, Eldorado–Vilarinho): no official open GTFS.
   # Check Mobility Database for community feeds in Phase 1; stations are in OSM.
@@ -28,16 +29,23 @@ feeds:
     status: to_find
 
 live:
-  - id: bhtrans-positions
-    type: json                           # also CSV; refreshed ~every 20 s
-    # Resolve exact endpoint from the dados.pbh.gov.br ônibus datasets in Phase 1:
-    url: https://dados.pbh.gov.br/dataset/?tags=ONIBUS
-    auth: none
+  # Resolved 2026-08-14 via CKAN "GTFS RT" dataset. NOTE: http:// cleartext —
+  # per threat model (docs/ARCHITECTURE.md §security) label this data
+  # lower-trust and allow-list the host in networkSecurityConfig.
+  - id: bhtrans-rt-vehicle-positions
+    type: gtfs-rt
+    url: http://realtime4.mobilibus.com/web/4ch6j/vehicle-positions?accesskey=982a57efd77a9462bf1665696fb25984
+    auth: embedded-key                   # key is public in the open-data portal
     license: CC-BY-4.0
-  - id: bhtrans-gtfs-rt
-    type: gtfs-rt                        # vehicle positions + service alerts
-    url: null                            # resolve in Phase 1
-    auth: none
+  - id: bhtrans-rt-trip-updates
+    type: gtfs-rt
+    url: http://realtime4.mobilibus.com/web/4ch6j/trip-updates?accesskey=982a57efd77a9462bf1665696fb25984
+    auth: embedded-key
+    license: CC-BY-4.0
+  - id: bhtrans-rt-alerts
+    type: gtfs-rt
+    url: http://realtime4.mobilibus.com/web/4ch6j/alerts?accesskey=982a57efd77a9462bf1665696fb25984
+    auth: embedded-key
     license: CC-BY-4.0
 
 license: CC-BY-4.0
