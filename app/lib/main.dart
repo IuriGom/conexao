@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'planner/planner_screen.dart';
+
 void main() => runApp(const ConexaoApp());
 
 /// Conexão — app de transporte público offline, open source e sem Google.
@@ -169,12 +171,7 @@ class CityScreen extends StatelessWidget {
               'Ônibus, BRT, metrô, trem e VLT — itinerários completos '
                   'e tabelas de horário offline.',
             ),
-            _placeholder(
-              Icons.route_outlined,
-              'Planejador de viagem',
-              'A→B com baldeações, calculado no aparelho '
-                  '(algoritmo CSA sobre o GTFS).',
-            ),
+            PlannerScreen(cityId: city.id),
           ],
         ),
       ),

@@ -18,7 +18,11 @@ part-time with AI assistance, plan on **6–12 months to v1.0 Android**.
 - [x] `compile_gtfs.py` v1: GTFS → SQLite + FTS5; frequencies.txt
       materialized into explicit trips; blocking quality gate; untrusted-input
       guards — tested offline against a synthetic feed (14 checks green)
-- [ ] App shell v0: PT-BR city picker + honest badges (done, on emulator)
+- [x] App shell v0: PT-BR city picker + honest badges (on emulator)
+- [x] Planner UI v0: FTS stop search → on-device journey view; verified on
+      emulator with the real BH pack (Av. Vilarinho → Estação Pampulha via
+      line 617, fully offline). RouterWorker isolate keeps the day timetable
+      resident; ANR-safe
 - [ ] PMTiles per city bbox (Geofabrik → Planetiler in CI)
 - [ ] ed25519 pack + catalog signing
 - [ ] Weekly GitHub Actions → Release `data-YYYY.WW` + `catalog.json`
