@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'map/map_screen.dart';
+import 'map/offline_style.dart';
+import 'packs/pack_manager.dart';
 import 'planner/planner_screen.dart';
 
 void main() => runApp(const ConexaoApp());
@@ -41,6 +44,7 @@ class City {
   final String region;
   final Coverage coverage;
   final String note;
+  final double centerLat, centerLon;
 
   const City({
     required this.id,
@@ -48,6 +52,8 @@ class City {
     required this.region,
     required this.coverage,
     required this.note,
+    required this.centerLat,
+    required this.centerLon,
   });
 }
 
@@ -60,6 +66,7 @@ const cities = [
     coverage: Coverage.planned,
     note: 'GTFS oficial ainda não publicado (Lei 7.836/2025). '
         'Metrô-DF chega primeiro, via feed comunitário.',
+    centerLat: -15.7942, centerLon: -47.8822,
   ),
   City(
     id: 'belo_horizonte',
@@ -68,6 +75,7 @@ const cities = [
     coverage: Coverage.planned,
     note: 'Cidade de referência do pipeline. Dados abertos CC-BY, '
         'posições ao vivo a cada 20 s.',
+    centerLat: -19.9167, centerLon: -43.9345,
   ),
 ];
 
@@ -131,6 +139,60 @@ class CityPickerScreen extends StatelessWidget {
   }
 }
 
+/// Mapa tab: the offline PMTiles map when present, otherwise the
+/// placeholder explaining what comes with the pack.
+class CityMapTab extends StatelessWidget {
+  final City city;
+  const CityMapTab({super.key, required this.city});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: _style(),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final style = snap.data;
+        if (style == null) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.map_outlined, size: 56, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('Mapa offline',
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text('Chega com o pacote de dados da cidade '
+                      '(tiles PMTiles, renderizado com MapLibre).',
+                      textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          );
+        }
+        return TransitMap(
+          styleJson: style,
+          centerLat: city.centerLat,
+          centerLon: city.centerLon,
+        );
+      },
+    );
+  }
+
+  Future<String?> _style() async {
+    final pm = PackManager();
+    final map = await pm.mapFile(city.id);
+    if (map == null) return null;
+    final glyphs = await pm.ensureGlyphs();
+    return OfflineStyle.build(pmtilesPath: map.path, glyphsDir: glyphs.path);
+  }
+}
+
 class CityScreen extends StatelessWidget {
   final City city;
   const CityScreen({super.key, required this.city});
@@ -153,12 +215,7 @@ class CityScreen extends StatelessWidget {
         ),
         body: TabBarView(
           children: [
-            _placeholder(
-              Icons.map_outlined,
-              'Mapa offline',
-              'Chega com o pacote de dados da cidade '
-                  '(tiles PMTiles, renderizado com MapLibre).',
-            ),
+            CityMapTab(city: city),
             _placeholder(
               Icons.place_outlined,
               'Paradas próximas',
@@ -171,7 +228,11 @@ class CityScreen extends StatelessWidget {
               'Ônibus, BRT, metrô, trem e VLT — itinerários completos '
                   'e tabelas de horário offline.',
             ),
-            PlannerScreen(cityId: city.id),
+            PlannerScreen(
+              cityId: city.id,
+              centerLat: city.centerLat,
+              centerLon: city.centerLon,
+            ),
           ],
         ),
       ),
