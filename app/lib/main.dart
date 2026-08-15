@@ -220,6 +220,9 @@ class CityScreen extends StatelessWidget {
           ),
         ),
         body: TabBarView(
+          // Horizontal page-swipe fights the map's pan gesture; tabs still
+          // switch by tapping the headers.
+          physics: const NeverScrollableScrollPhysics(),
           children: [
             CityMapTab(city: city),
             _placeholder(

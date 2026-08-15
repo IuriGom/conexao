@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
@@ -72,6 +74,11 @@ class TransitMapState extends State<TransitMap> {
       onStyleLoadedCallback: _syncPins,
       onMapClick: (point, latLng) =>
           widget.onTap?.call(latLng.latitude, latLng.longitude),
+      // The map sits inside a TabBarView — claim every gesture eagerly so
+      // the pager's horizontal swipe never steals pans/pinches mid-drag.
+      gestureRecognizers: {
+        Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+      },
       // Offline pack: the compass/attribution defaults stay; no logo URL.
       compassEnabled: true,
       myLocationEnabled: false, // Play-Services-free location lands later
