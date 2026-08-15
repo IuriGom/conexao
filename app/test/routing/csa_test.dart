@@ -155,6 +155,49 @@ void main() {
       expect(j, isNull);
     });
 
+    test('identical parallel lines do not thrash transfers', () {
+      // Metrô-DF case: Verde and Laranja share the trunk with identical
+      // times. Earliest-arrival ties must not produce a journey that
+      // alternates lines at every stop — staying on board wins ties.
+      int h(int hh, int mm) => hh * 3600 + mm * 60;
+      final stops = {
+        for (var s = 1; s <= 6; s++)
+          s: StopNode(s, 'Trunk $s', -15.8 - s * 0.011, -47.9),
+      };
+      final trips = {
+        301: const TripInfo(tripI: 301, routeShortName: 'Verde', serviceI: 1),
+        302: const TripInfo(
+            tripI: 302, routeShortName: 'Laranja', serviceI: 1),
+      };
+      final conns = <Connection>[];
+      final tst = <int, List<(int, int, int)>>{};
+      for (final t in [301, 302]) {
+        tst[t] = [];
+        var secs = h(8, 0);
+        for (var s = 1; s < 6; s++) {
+          conns.add(Connection(t, s, s + 1, secs, secs + 120));
+          tst[t]!.add((s, secs, secs));
+          secs += 120;
+        }
+        tst[t]!.add((6, secs, secs));
+      }
+      final tt = Timetable(
+        stops: stops, trips: trips, connections: conns,
+        tripStopTimes: tst, footpaths: const {}, activeServices: {1},
+      );
+      final j = CsaRouter(tt).route(
+        originLat: -15.811, originLon: -47.9,
+        destLat: -15.866, destLon: -47.9,
+        departureSecs: h(7, 55),
+      );
+      expect(j, isNotNull);
+      expect(j!.transfers, 0);
+      expect(j.legs.where((l) => !l.isWalk), hasLength(1));
+      // Boards the 08:00 departure exactly — no phantom transfer slack
+      // at the journey's first boarding.
+      expect(j.legs.firstWhere((l) => !l.isWalk).startSecs, h(8, 0));
+    });
+
     test('performance: 200k connections scan in reasonable time', () {
       // Synthetic big city: 2000 trips x 100 stops on a line.
       final stops = <int, StopNode>{};

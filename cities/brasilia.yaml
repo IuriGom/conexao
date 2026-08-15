@@ -37,13 +37,14 @@ feeds:
     action: file LAI request citing Lei 7.836/2025 (template: docs/LAI_BRASILIA.md)
 
   # --- Metrô-DF: timetables published on the operator site, not as GTFS ---
-  # Fallback: hand-encode as a small community GTFS (2 lines, ~27 stations,
-  # headway-based → frequencies.txt, materialized by the pipeline).
+  # Community GTFS built 2026-08-15: pipeline/build_metro_df.py
+  # (2 lines, 27 stations, OSM coordinates, interpolated run times,
+  # headway-based with exact_times=0 → app labels departures approximate).
   - id: metro-df
     mode: subway
     url: https://www.metro.df.gov.br/    # timetables as HTML/PDF — verify exact source
     provenance: manual                   # community-encoded GTFS from published timetables
-    status: to_build
+    status: built                        # pipeline/tmp/metro_df_gtfs.zip → brasilia.sqlite
 
 live:
   # No public real-time API known for DF buses as of 2026-08-12.
@@ -57,10 +58,11 @@ attribution: >
   Metrô-DF (horários publicados). OpenStreetMap contributors (ODbL).
 
 status:
-  coverage: scheduled_only_planned
+  coverage: metro_only_community
   badge: SCHEDULED
-  blocker: official GTFS not yet published (Lei 7.836/2025 not implemented)
+  blocker: bus GTFS not yet published (Lei 7.836/2025 not implemented)
   notes: >
-    Lead city for design and dogfooding (maintainer is local). First pack
-    will be Metrô-DF (community-encoded) + OSM map/search; bus routing lands
-    when the official feed is published or via LAI.
+    Lead city for design and dogfooding (maintainer is local). Metrô-DF
+    community pack built 2026-08-15 (build_metro_df.py): 2 lines, 27
+    stations, approximate headway-based times, honestly labeled in-app.
+    Bus routing lands when the official feed is published or via LAI.

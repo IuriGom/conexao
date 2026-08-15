@@ -63,9 +63,9 @@ const cities = [
     id: 'brasilia',
     name: 'Brasília',
     region: 'Distrito Federal',
-    coverage: Coverage.planned,
-    note: 'GTFS oficial ainda não publicado (Lei 7.836/2025). '
-        'Metrô-DF chega primeiro, via feed comunitário.',
+    coverage: Coverage.scheduled,
+    note: 'Metrô-DF (feed comunitário, horários aproximados). '
+        'Ônibus: GTFS oficial ainda não publicado (Lei 7.836/2025).',
     centerLat: -15.7942, centerLon: -47.8822,
   ),
   City(
@@ -185,11 +185,17 @@ class CityMapTab extends StatelessWidget {
   }
 
   Future<String?> _style() async {
-    final pm = PackManager();
-    final map = await pm.mapFile(city.id);
-    if (map == null) return null;
-    final glyphs = await pm.ensureGlyphs();
-    return OfflineStyle.build(pmtilesPath: map.path, glyphsDir: glyphs.path);
+    try {
+      final pm = PackManager();
+      final map = await pm.mapFile(city.id);
+      if (map == null) return null;
+      final glyphs = await pm.ensureGlyphs();
+      return await OfflineStyle.build(
+          pmtilesPath: map.path, glyphsDir: glyphs.path);
+    } catch (_) {
+      // No plugin (tests) or unreadable storage: same as no pack.
+      return null;
+    }
   }
 }
 

@@ -44,13 +44,18 @@ User on hotspot. Cap: ~4.5 GB total (approved). Spent ≈ 3.6 GB incl. NDK
 ## Resume checklist (next session)
 
 1. ~~Push BH pmtiles to emulator~~ — DONE (both pmtiles on device).
-   Next: install the rebuilt APK and demo the map + pin planner.
-   Watch for glyph errors — if labels are missing, check
-   `PackManager.ensureGlyphs()` created the `file://` glyphs dir.
-2. Fix cosmetic: keyboard overflow banner in planner (debug-only).
-3. Brasília: no official GTFS yet (Lei 7.836/2025 unpublished). Hand-encode
-   Metrô-DF community GTFS (2 lines, ~27 stations) — `cities/brasilia.yaml`.
-   LAI template ready: `docs/LAI_BRASILIA.md` (not yet filed — user action).
+   ~~Install rebuilt APK and demo the map + pin planner~~ — DONE
+   (BH: offline route from two map taps, line 8103; Brasília: labels
+   render from local PMTiles).
+2. ~~Brasília Metrô-DF community GTFS~~ — DONE 2026-08-15:
+   `pipeline/build_metro_df.py` (2 lines, 27 OSM stations, interpolated
+   times, exact_times=0) → brasilia.sqlite (0.8 MB, 1048 trips/day).
+   Fixed two real bugs along the way: compile_gtfs.py deleted frequency
+   templates after the first window (multi-window feeds lost trips), and
+   CSA produced transfer-thrash on tied parallel services (Dart's sort is
+   unstable — connections now sort by (dep, tripI); transfer slack no
+   longer applies at journey start). LAI template still unfiled (user).
+3. Fix cosmetic: keyboard overflow banner in planner (debug-only).
 4. Pack download flow: GitHub Releases + ed25519 signing + catalog.json
    (plan v2.4: signed catalog is the control plane). See `docs/ARCHITECTURE.md`.
 5. CI workflow: weekly pack build (validator gate blocking, SHA-pinned

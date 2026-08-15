@@ -45,9 +45,11 @@ class RouterWorker {
     required double destLat,
     required double destLon,
     required int departureSecs,
+    double maxWalkMeters = 900,
   }) async {
     final r = await _request(
-        ['route', originLat, originLon, destLat, destLon, departureSecs]);
+        ['route', originLat, originLon, destLat, destLon, departureSecs,
+         maxWalkMeters]);
     return r as Journey?;
   }
 
@@ -91,7 +93,8 @@ class RouterWorker {
               : CsaRouter(tt!).route(
                   originLat: p[1] as double, originLon: p[2] as double,
                   destLat: p[3] as double, destLon: p[4] as double,
-                  departureSecs: p[5] as int);
+                  departureSecs: p[5] as int,
+                  maxWalkMeters: p.length > 6 ? p[6] as double : 900);
         case 'close':
           loader?.close();
           loader = null;

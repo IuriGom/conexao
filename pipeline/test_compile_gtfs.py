@@ -58,6 +58,7 @@ FEED = {
     "frequencies.txt": (
         "trip_id,start_time,end_time,headway_secs,exact_times\n"
         "T_METRO_FREQ,06:00:00,07:00:00,600,0\n"
+        "T_METRO_FREQ,08:00:00,08:30:00,900,0\n"
     ),
 }
 
@@ -99,8 +100,11 @@ def main():
     check("stops", q("SELECT COUNT(*) FROM stops"), 5)
     check("routes", q("SELECT COUNT(*) FROM routes"), 2)
     check("bus trips", q("SELECT COUNT(*) FROM trips WHERE trip_id='T_BUS_1'"), 1)
-    check("freq trips materialized (6 in 06:00-07:00 @600s)",
-          q("SELECT COUNT(*) FROM trips WHERE trip_id LIKE 'T_METRO_FREQ#%'"), 6)
+    check("freq trips materialized (6 in 06:00-07:00 @600s + 2 in 08:00-08:30 @900s)",
+          q("SELECT COUNT(*) FROM trips WHERE trip_id LIKE 'T_METRO_FREQ#%'"), 8)
+    check("second window expanded (regression: template deleted too early)",
+          q("SELECT COUNT(*) FROM trips WHERE trip_id LIKE 'T_METRO_FREQ#%' "
+            "AND CAST(substr(trip_id, instr(trip_id, '#') + 1) AS INT) >= 28800"), 2)
     check("template trip removed",
           q("SELECT COUNT(*) FROM trips WHERE trip_id='T_METRO_FREQ'"), 0)
     check("freq_exact=0 kept for honest labeling",
