@@ -11,6 +11,12 @@ class Timetable {
   final Map<int, TripInfo> trips;
 
   /// All connections on the service day, sorted by departure time.
+  /// Ties break deterministically by trip id: Dart's List.sort is
+  /// UNSTABLE, and with duplicate services on a shared corridor (e.g.
+  /// Metrô-DF Verde/Laranja on the trunk, identical times) an unstable
+  /// order lets each stop's earliest-arrival label go to a random line,
+  /// which reconstructs as phantom transfers. A total order makes every
+  /// tied label go to the same trip.
   final List<Connection> connections;
 
   /// tripI -> ordered (stopI, arrSecs, depSecs) for journey reconstruction.
@@ -41,8 +47,10 @@ class Timetable {
     required this.footpaths,
     required this.activeServices,
     double gridCellDeg = 0.005, // ~500 m
-  })  : connections = List.of(connections)..sort(
-            (a, b) => a.dep.compareTo(b.dep)),
+  })  : connections = List.of(connections)
+          ..sort((a, b) => a.dep != b.dep
+              ? a.dep.compareTo(b.dep)
+              : a.tripI.compareTo(b.tripI)),
         _cellDeg = gridCellDeg,
         _grid = _buildGrid(stops, gridCellDeg);
 

@@ -255,6 +255,7 @@ def materialize_frequencies(cur, feed, trip_i):
 
     made = 0
     next_i = max(trip_i.values(), default=0)
+    templates_used = set()
     for r in feed.rows("frequencies.txt"):
         tpl = r["trip_id"]
         tpl_i = trip_i.get(tpl)
@@ -292,8 +293,13 @@ def materialize_frequencies(cur, feed, trip_i):
                   d + off if d is not None else None)
                  for seq, si, a, d in tpl_st])
             made += 1
+        templates_used.add(tpl)
 
-        # Remove the headway template so CSA never sees a phantom trip.
+    # Remove headway templates only after ALL windows are expanded — a trip
+    # can have several frequencies.txt rows (e.g. peak/off-peak), and each
+    # expansion reads the template's stop_times.
+    for tpl in templates_used:
+        tpl_i = trip_i[tpl]
         cur.execute("DELETE FROM stop_times WHERE trip_i=?", (tpl_i,))
         cur.execute("DELETE FROM trips WHERE trip_i=?", (tpl_i,))
     return made

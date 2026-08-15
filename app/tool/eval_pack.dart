@@ -16,18 +16,24 @@ void main(List<String> args) {
   print('load: ${sw.elapsed} | stops=${tt.stops.length} '
       'trips=${tt.trips.length} connections=${tt.connections.length}');
 
-  final router = CsaRouter(tt);
-  final pairs = {
-    'Centro -> Pampulha': [-19.9191, -43.9386, -19.8519, -43.9506],
-    'Centro -> Barreiro': [-19.9191, -43.9386, -19.9762, -44.0245],
-    'Savassi -> Estação Central': [-19.9369, -43.9372, -19.9170, -43.9340],
-  };
+  final router = CsaRouter(tt, transferSlackSecs: int.tryParse(Platform.environment["SLACK"] ?? "") ?? 180);
+  final pairs = <String, List<double>>{};
+  if (args.length > 2) {
+    // One-off pair from CLI: <pack> <date> <lat1> <lon1> <lat2> <lon2>
+    pairs['cli'] = args.sublist(2, 6).map(double.parse).toList();
+  } else {
+    pairs.addAll({
+      'Centro -> Pampulha': [-19.9191, -43.9386, -19.8519, -43.9506],
+      'Centro -> Barreiro': [-19.9191, -43.9386, -19.9762, -44.0245],
+      'Savassi -> Estação Central': [-19.9369, -43.9372, -19.9170, -43.9340],
+    });
+  }
   for (final e in pairs.entries) {
     sw.reset();
     final j = router.route(
       originLat: e.value[0], originLon: e.value[1],
       destLat: e.value[2], destLon: e.value[3],
-      departureSecs: 8 * 3600,
+      departureSecs: int.tryParse(Platform.environment["DEP"] ?? "") ?? 8 * 3600,
     );
     print('\n== ${e.key} (${sw.elapsedMilliseconds}ms)');
     print(j == null ? '   no journey found' : '   $j');

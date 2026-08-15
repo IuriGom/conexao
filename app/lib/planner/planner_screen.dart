@@ -45,24 +45,29 @@ class _PlannerScreenState extends State<PlannerScreen> {
   }
 
   Future<void> _openPack() async {
-    final pm = PackManager();
-    final transit = await pm.packFile(widget.cityId);
-    final map = await pm.mapFile(widget.cityId);
-    if (!mounted) return;
-    if (transit == null) {
-      setState(() => _packMissing = true);
-      return;
+    try {
+      final pm = PackManager();
+      final transit = await pm.packFile(widget.cityId);
+      final map = await pm.mapFile(widget.cityId);
+      if (!mounted) return;
+      if (transit == null) {
+        setState(() => _packMissing = true);
+        return;
+      }
+      _packPath = transit.path;
+      _worker = await RouterWorker.spawn();
+      if (map == null) {
+        setState(() => _mapMissing = true);
+        return;
+      }
+      final glyphs = await pm.ensureGlyphs();
+      final style =
+          await OfflineStyle.build(pmtilesPath: map.path, glyphsDir: glyphs.path);
+      if (mounted) setState(() => _styleJson = style);
+    } catch (_) {
+      // No plugin (tests) or unreadable storage: same as no pack.
+      if (mounted) setState(() => _packMissing = true);
     }
-    _packPath = transit.path;
-    _worker = await RouterWorker.spawn();
-    if (map == null) {
-      setState(() => _mapMissing = true);
-      return;
-    }
-    final glyphs = await pm.ensureGlyphs();
-    final style =
-        await OfflineStyle.build(pmtilesPath: map.path, glyphsDir: glyphs.path);
-    if (mounted) setState(() => _styleJson = style);
   }
 
   void _onTapMap(double lat, double lon) {
@@ -93,6 +98,9 @@ class _PlannerScreenState extends State<PlannerScreen> {
       originLat: o.lat, originLon: o.lon,
       destLat: d.lat, destLon: d.lon,
       departureSecs: now.hour * 3600 + now.minute * 60 + now.second,
+      // Brazilian cities are spread out — Brasília's metro stations are
+      // 1-2 km apart. 900 m is too tight for map taps at city zoom.
+      maxWalkMeters: 1500,
     );
     if (!mounted) return;
     setState(() {

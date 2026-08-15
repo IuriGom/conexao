@@ -45,7 +45,23 @@ class CsaRouter {
     int? bestDestStop;
 
     void relax(int tripI, int fromI, int toI, int dep, int arr) {
-      if (arr >= (inTime[toI] ?? inf)) return;
+      final cur = inTime[toI];
+      if (cur != null && arr > cur) return;
+      if (arr == cur) {
+        // Tie: only replace the parent when it means STAYING on the same
+        // vehicle (parent[fromI] is a ride on this trip). Without this,
+        // two services with identical times on a shared corridor (e.g.
+        // Metrô-DF Verde/Laranja on the trunk) produce journeys that
+        // pointlessly alternate lines at every stop.
+        final here = parent[fromI];
+        final there = parent[toI];
+        final sameRide = here != null &&
+            here.kind == _Kind.ride &&
+            here.tripI == tripI;
+        final thereIsOtherRide =
+            there != null && there.kind == _Kind.ride && there.tripI != tripI;
+        if (!sameRide || !thereIsOtherRide) return;
+      }
       inTime[toI] = arr;
       parent[toI] = _Link.ride(tripI, fromI, toI, dep, arr);
       // Walk onward from this stop (footpath transfer / dest approach).
@@ -74,9 +90,17 @@ class CsaRouter {
         continue;
       }
       final reach = inTime[c.fromI];
-      if (reach != null && reach + transferSlackSecs <= c.dep) {
-        boarded[c.tripI] = c.fromI;
-        relax(c.tripI, c.fromI, c.toI, c.dep, c.arr);
+      if (reach != null) {
+        // Transfer slack applies only vehicle-to-vehicle. Reaching a stop
+        // on foot (journey start or a walking transfer) already includes
+        // the walking time as buffer — charging slack again would push
+        // "depart now" queries onto a later departure for no reason.
+        final p = parent[c.fromI];
+        final slack = (p != null && p.kind == _Kind.ride) ? transferSlackSecs : 0;
+        if (reach + slack <= c.dep) {
+          boarded[c.tripI] = c.fromI;
+          relax(c.tripI, c.fromI, c.toI, c.dep, c.arr);
+        }
       }
     }
 
