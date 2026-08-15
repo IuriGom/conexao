@@ -28,7 +28,9 @@ Lead city: **Brasília** (user lives there); reference city: **Belo Horizonte**.
   Planner is now map-first: tap = origin pin, tap = dest pin.
   Tiles built locally: `pipeline/tmp/brasilia.pmtiles` (24 MB, whole DF),
   `pipeline/tmp/belo_horizonte.pmtiles` (10 MB, city bbox).
-- **Toolchain**: Flutter 3.47, JDK 17 (app builds) + JDK 21 (Planetiler),
+- **Toolchain**: Flutter 3.47, **JDK 21** (maplibre_gl needs
+  `sourceCompatibility 21`; `flutter config --jdk-dir` is now pinned to
+  `/opt/homebrew/opt/openjdk@21`, which overrides JAVA_HOME for Gradle),
   Android SDK at `/opt/homebrew/share/android-commandlinetools`
   (ANDROID_HOME), NDK 28.2 already installed. Emulator AVD `conexao`
   (Android 36 AOSP, no Google).
@@ -41,11 +43,10 @@ User on hotspot. Cap: ~4.5 GB total (approved). Spent ≈ 3.6 GB incl. NDK
 
 ## Resume checklist (next session)
 
-1. If APK build (`flutter build apk --debug` in app/) finished: install +
-   push BH pmtiles to emulator and demo the map + pin planner:
-   - `adb push pipeline/tmp/belo_horizonte.pmtiles /data/local/tmp/`
-   - `adb shell run-as dev.conexao.conexao cp /data/local/tmp/belo_horizonte.pmtiles /data/data/dev.conexao.conexao/files/packs/`
-   - Packs live in `<app files>/packs/<city>.sqlite|.pmtiles`
+1. ~~Push BH pmtiles to emulator~~ — DONE (both pmtiles on device).
+   Next: install the rebuilt APK and demo the map + pin planner.
+   Watch for glyph errors — if labels are missing, check
+   `PackManager.ensureGlyphs()` created the `file://` glyphs dir.
 2. Fix cosmetic: keyboard overflow banner in planner (debug-only).
 3. Brasília: no official GTFS yet (Lei 7.836/2025 unpublished). Hand-encode
    Metrô-DF community GTFS (2 lines, ~27 stations) — `cities/brasilia.yaml`.
@@ -65,8 +66,7 @@ User on hotspot. Cap: ~4.5 GB total (approved). Spent ≈ 3.6 GB incl. NDK
 ```bash
 # emulator
 /opt/homebrew/share/android-commandlinetools/emulator/emulator -avd conexao -gpu host -no-metrics
-# env for builds
-export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+# env for builds (JDK 21 required since maplibre_gl; flutter jdk-dir is set globally)
 export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
 # tests
 cd app && flutter test

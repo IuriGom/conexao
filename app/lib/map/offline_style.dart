@@ -32,6 +32,16 @@ class OfflineStyle {
             !((l['layout'] as Map?)?.containsKey('icon-image') ?? false))
           l,
     ];
+
+    // Only the Regular font stack is bundled with the app; point every
+    // label layer at it so no glyph request ever misses (Bold/Italic
+    // would 404 on the local file:// glyphs dir and render nothing).
+    for (final l in style['layers'] as List) {
+      final layout = (l as Map)['layout'] as Map?;
+      if (layout != null && layout.containsKey('text-font')) {
+        layout['text-font'] = const ['Noto Sans Regular'];
+      }
+    }
     return jsonEncode(style);
   }
 }
