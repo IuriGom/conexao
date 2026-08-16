@@ -37,16 +37,18 @@ def main():
 
     cities = {}
     for f in sorted(dist.iterdir()):
-        m = re.fullmatch(r"([\w-]+)\.(sqlite|pmtiles)", f.name)
+        m = re.fullmatch(r"([\w-]+)\.(sqlite|pmtiles)(\.gz)?", f.name)
         if not m:
             continue
-        city, kind = m.groups()
+        city, kind, gz = m.groups()
         entry = cities.setdefault(city, {"files": {}})
         entry["files"][kind] = {
             "url": f"{base}/{f.name}",
             "size": f.stat().st_size,
             "sha256": hashlib.sha256(f.read_bytes()).hexdigest(),
         }
+        if gz:
+            entry["files"][kind]["compressed"] = "gzip"
 
     for city, entry in cities.items():
         badge = badge_for(city)

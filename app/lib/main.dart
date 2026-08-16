@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'map/map_screen.dart';
 import 'map/offline_style.dart';
+import 'location/location_service.dart';
 import 'packs/pack_download.dart';
 import 'packs/pack_manager.dart';
 import 'planner/planner_screen.dart';
@@ -226,7 +227,8 @@ class _CityPickerScreenState extends State<CityPickerScreen> {
 /// placeholder explaining what comes with the pack.
 class CityMapTab extends StatelessWidget {
   final City city;
-  const CityMapTab({super.key, required this.city});
+  final (double, double)? userPosition;
+  const CityMapTab({super.key, required this.city, this.userPosition});
 
   @override
   Widget build(BuildContext context) {
@@ -262,6 +264,7 @@ class CityMapTab extends StatelessWidget {
           styleJson: style,
           centerLat: city.centerLat,
           centerLon: city.centerLon,
+          userPosition: userPosition,
         );
       },
     );
@@ -282,17 +285,53 @@ class CityMapTab extends StatelessWidget {
   }
 }
 
-class CityScreen extends StatelessWidget {
+class CityScreen extends StatefulWidget {
   final City city;
   const CityScreen({super.key, required this.city});
 
   @override
+  State<CityScreen> createState() => _CityScreenState();
+}
+
+class _CityScreenState extends State<CityScreen> {
+  (double, double)? _userPosition;
+  bool _locating = false;
+
+  Future<void> _locate() async {
+    setState(() => _locating = true);
+    final pos = await LocationService.current();
+    if (!mounted) return;
+    setState(() {
+      _locating = false;
+      if (pos != null) _userPosition = pos;
+    });
+    if (pos == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Sem sinal de localização (permissão negada ou '
+              'GPS indisponível).')));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final city = widget.city;
     return DefaultTabController(
       length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text(city.name),
+          actions: [
+            IconButton(
+              icon: _locating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.my_location),
+              tooltip: 'Minha localização',
+              onPressed: _locating ? null : _locate,
+            ),
+          ],
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Mapa'),
@@ -307,11 +346,12 @@ class CityScreen extends StatelessWidget {
           // switch by tapping the headers.
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            CityMapTab(city: city),
+            CityMapTab(city: city, userPosition: _userPosition),
             StopsScreen(
               cityId: city.id,
-              refLat: city.centerLat,
-              refLon: city.centerLon,
+              refLat: _userPosition?.$1 ?? city.centerLat,
+              refLon: _userPosition?.$2 ?? city.centerLon,
+              refIsUser: _userPosition != null,
             ),
             LinesScreen(cityId: city.id),
             PlannerScreen(

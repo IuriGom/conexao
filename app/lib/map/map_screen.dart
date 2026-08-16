@@ -20,6 +20,10 @@ class TransitMap extends StatefulWidget {
   final List<MapPin> pins;
   final void Function(double lat, double lon)? onTap;
 
+  /// Device position: drawn as a blue dot; the camera moves to it whenever
+  /// it changes (set after a my-location fix).
+  final (double, double)? userPosition;
+
   const TransitMap({
     super.key,
     required this.styleJson,
@@ -28,6 +32,7 @@ class TransitMap extends StatefulWidget {
     this.zoom = 11.5,
     this.pins = const [],
     this.onTap,
+    this.userPosition,
   });
 
   @override
@@ -54,12 +59,26 @@ class TransitMapState extends State<TransitMap> {
         circleStrokeWidth: 2,
       )));
     }
+    final u = widget.userPosition;
+    if (u != null) {
+      _circles.add(await c.addCircle(CircleOptions(
+        geometry: LatLng(u.$1, u.$2),
+        circleColor: '#1565C0', // blue: you are here
+        circleRadius: 8,
+        circleStrokeColor: '#FFFFFF',
+        circleStrokeWidth: 2,
+      )));
+    }
   }
 
   @override
   void didUpdateWidget(TransitMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     _syncPins();
+    final u = widget.userPosition;
+    if (u != null && u != oldWidget.userPosition) {
+      _controller?.animateCamera(CameraUpdate.newLatLng(LatLng(u.$1, u.$2)));
+    }
   }
 
   @override

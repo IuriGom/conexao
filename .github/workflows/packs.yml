@@ -59,6 +59,12 @@ jobs:
               || echo "no prior pmtiles for $city (catalog will omit it)"
           done
 
+      - name: Compress SQLite packs (users on metered connections:
+          224 MB -> ~65 MB)
+        run: |
+          cd pipeline/dist
+          for f in *.sqlite; do gzip -9 "$f"; done
+
       - name: Assemble + sign catalog
         env:
           PACK_SIGNING_KEY: ${{ secrets.PACK_SIGNING_KEY }}

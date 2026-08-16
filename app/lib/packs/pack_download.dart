@@ -82,13 +82,20 @@ class PackFile {
   final String url;
   final int size;
   final String sha256;
+  final bool gzipped;
 
-  const PackFile({required this.url, required this.size, required this.sha256});
+  const PackFile({
+    required this.url,
+    required this.size,
+    required this.sha256,
+    this.gzipped = false,
+  });
 
   factory PackFile.fromJson(Map<String, dynamic> json) => PackFile(
         url: json['url'] as String,
         size: json['size'] as int,
         sha256: json['sha256'] as String,
+        gzipped: json['compressed'] == 'gzip',
       );
 }
 
@@ -102,7 +109,7 @@ Future<void> downloadCity(
   final dir = await PackManager().packsDir();
   await dir.create(recursive: true);
   final http = HttpClient();
-  final tmp = File('${dir.path}/.partial');
+  var tmp = File('${dir.path}/.partial');
   try {
     var received = 0;
     for (final f in entry.files.values) {
@@ -124,8 +131,18 @@ Future<void> downloadCity(
         await tmp.delete();
         throw const FormatException('pack checksum mismatch');
       }
-      final name = f.url.split('/').last;
-      await tmp.rename('${dir.path}/$name');
+      var name = f.url.split('/').last;
+      if (f.gzipped) {
+        // Stream-decompress to the final name (big packs stay off the heap).
+        name = name.replaceAll(RegExp(r'\.gz$'), '');
+        final out = File('${dir.path}/$name');
+        final outSink = out.openWrite();
+        await tmp.openRead().transform(gzip.decoder).pipe(outSink);
+        await tmp.delete();
+        tmp = out; // so a later failure cleans up the partial output
+      }
+      final target = '${dir.path}/$name';
+      if (tmp.path != target) await tmp.rename(target);
     }
   } finally {
     http.close();

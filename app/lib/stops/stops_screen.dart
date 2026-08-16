@@ -14,11 +14,15 @@ class StopsScreen extends StatefulWidget {
   final String cityId;
   final double refLat, refLon;
 
+  /// True when the reference point is the device position (vs city center).
+  final bool refIsUser;
+
   const StopsScreen({
     super.key,
     required this.cityId,
     required this.refLat,
     required this.refLon,
+    this.refIsUser = false,
   });
 
   @override
@@ -40,6 +44,15 @@ class _StopsScreenState extends State<StopsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(StopsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refLat != widget.refLat ||
+        oldWidget.refLon != widget.refLon) {
+      _load(); // reference point moved (e.g. my-location fix arrived)
+    }
   }
 
   Future<void> _load() async {
@@ -94,10 +107,12 @@ class _StopsScreenState extends State<StopsScreen> {
     }
     return ListView(
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text('Perto do centro da cidade (localização chega em '
-              'breve). Horários de hoje:'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(widget.refIsUser
+              ? 'Perto de você. Horários de hoje:'
+              : 'Perto do centro da cidade (toque ⊕ para usar sua '
+                  'localização). Horários de hoje:'),
         ),
         for (final row in rows)
           ListTile(
