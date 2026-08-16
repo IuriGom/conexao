@@ -8,8 +8,8 @@ lead/dogfood city) has real routing.
 
 Data provenance — be honest about it:
   * Station names + coordinates: OpenStreetMap (ODbL), via Overpass.
-  * Line topology: Metrô-DF published map (Verde: Central ↔ Ceilândia;
-    Laranja: Central ↔ Samambaia; shared trunk Central ↔ Águas Claras).
+  * Line topology: Metrô-DF published map (Verde: Central – Ceilândia;
+    Laranja: Central – Samambaia; shared trunk Central ↔ Águas Claras).
   * Stop-to-stop times: INTERPOLATED from haversine distance at 36 km/h
     average + 25 s dwell — NOT measured run times.
   * Headways: plausible published-pattern approximations (peak ~8 min,
@@ -121,9 +121,9 @@ def main():
                      ["route_id", "agency_id", "route_short_name",
                       "route_long_name", "route_type"],
                      [("verde", "metrodf", "Verde",
-                       "Linha Verde: Central ↔ Ceilândia", 1),
+                       "Linha Verde: Central – Ceilândia", 1),
                       ("laranja", "metrodf", "Laranja",
-                       "Linha Laranja: Central ↔ Samambaia", 1)]))
+                       "Linha Laranja: Central – Samambaia", 1)]))
 
     # One weekday + one weekend service; frequencies carry the schedule.
     files.append(csv("calendar.txt",
