@@ -12,6 +12,40 @@ class SearchHit {
   const SearchHit({required this.kind, required this.refI, required this.name});
 }
 
+/// A transit line as listed in the Linhas tab.
+class RouteInfo {
+  final int routeI;
+  final String shortName;
+  final String longName;
+  final int routeType; // GTFS: 0 VLT, 1 metro, 2 rail, 3 bus...
+
+  const RouteInfo({
+    required this.routeI,
+    required this.shortName,
+    required this.longName,
+    required this.routeType,
+  });
+}
+
+/// One upcoming departure at a stop (Paradas tab).
+class StopDeparture {
+  final int tripI;
+  final String routeShortName;
+  final String? headsign;
+  final int depSecs; // seconds since 00:00 of the service day
+  final int? freqExact; // 0 = headway-based, label approximate
+
+  const StopDeparture({
+    required this.tripI,
+    required this.routeShortName,
+    required this.headsign,
+    required this.depSecs,
+    required this.freqExact,
+  });
+
+  bool get isApproximate => freqExact == 0;
+}
+
 /// Loads a city pack (produced by pipeline/compile_gtfs.py) into an
 /// in-memory [Timetable] for one service day.
 ///
@@ -43,6 +77,86 @@ class PackLoader {
     final row = r.first;
     return StopNode(row['stop_i'] as int, (row['name'] as String?) ?? '',
         (row['lat'] as double?) ?? 0, (row['lon'] as double?) ?? 0);
+  }
+
+  /// All stops with coordinates (Paradas tab computes distances itself).
+  List<StopNode> allStops() => [
+        for (final r in db.select(
+            'SELECT stop_i, name, lat, lon FROM stops '
+            'WHERE location_type = 0 AND lat IS NOT NULL ORDER BY name'))
+          StopNode(r['stop_i'] as int, (r['name'] as String?) ?? '',
+              r['lat'] as double, r['lon'] as double),
+      ];
+
+  /// All lines, for the Linhas tab.
+  List<RouteInfo> routes() => [
+        for (final r in db.select(
+            'SELECT route_i, short_name, long_name, route_type FROM routes '
+            'ORDER BY short_name'))
+          RouteInfo(
+            routeI: r['route_i'] as int,
+            shortName: (r['short_name'] as String?) ?? '',
+            longName: (r['long_name'] as String?) ?? '',
+            routeType: (r['route_type'] as int?) ?? 3,
+          ),
+      ];
+
+  /// Direction ids present for a route (usually [0, 1]; may include null).
+  List<int?> routeDirections(int routeI) => [
+        for (final r in db.select(
+            'SELECT DISTINCT direction_id FROM trips WHERE route_i = ?',
+            [routeI]))
+          r['direction_id'] as int?,
+      ];
+
+  /// Ordered stops of a representative trip (most stops wins) for one
+  /// route + direction. GTFS trips can diverge; this shows the canonical
+  /// pattern, which is what a rider expects from a line diagram.
+  List<StopNode> stopsForRoute(int routeI, int? directionId) {
+    final dir = directionId == null
+        ? 'direction_id IS NULL'
+        : 'direction_id = $directionId';
+    final t = db.select(
+        'SELECT t.trip_i FROM trips t JOIN stop_times st USING (trip_i) '
+        'WHERE t.route_i = ? AND $dir '
+        'GROUP BY t.trip_i ORDER BY COUNT(*) DESC LIMIT 1',
+        [routeI]);
+    if (t.isEmpty) return const [];
+    return [
+      for (final r in db.select(
+          'SELECT s.stop_i, s.name, s.lat, s.lon FROM stop_times st '
+          'JOIN stops s ON s.stop_i = st.stop_i '
+          'WHERE st.trip_i = ? ORDER BY st.stop_sequence',
+          [t.first['trip_i'] as int]))
+        StopNode(r['stop_i'] as int, (r['name'] as String?) ?? '',
+            (r['lat'] as double?) ?? 0, (r['lon'] as double?) ?? 0),
+    ];
+  }
+
+  /// Next departures at [stopI] on [day], at/after [afterSecs].
+  List<StopDeparture> nextDepartures(int stopI, DateTime day, int afterSecs,
+      {int limit = 5}) {
+    final services = activeServices(day);
+    if (services.isEmpty) return const [];
+    final marks = List.filled(services.length, '?').join(',');
+    return [
+      for (final r in db.select(
+          'SELECT st.departure_secs AS dep, t.trip_i, t.headsign, '
+          't.freq_exact, r.short_name '
+          'FROM stop_times st '
+          'JOIN trips t USING (trip_i) JOIN routes r USING (route_i) '
+          'WHERE st.stop_i = ? AND st.departure_secs IS NOT NULL '
+          'AND st.departure_secs >= ? AND t.service_i IN ($marks) '
+          'ORDER BY st.departure_secs LIMIT ?',
+          [stopI, afterSecs, ...services, limit]))
+        StopDeparture(
+          tripI: r['trip_i'] as int,
+          routeShortName: (r['short_name'] as String?) ?? '',
+          headsign: r['headsign'] as String?,
+          depSecs: r['dep'] as int,
+          freqExact: r['freq_exact'] as int?,
+        ),
+    ];
   }
 
   /// Full-text search over stops and routes (FTS5 index built by the  /// compiler; trigram when available = substring matching).

@@ -38,6 +38,7 @@ dependencies:
   sqlite3_flutter_libs: ^0.5.24
   path_provider: ^2.1.5
   maplibre_gl: ^0.26.2
+  cryptography: ^2.7.0
 
 dev_dependencies:
   flutter_test:

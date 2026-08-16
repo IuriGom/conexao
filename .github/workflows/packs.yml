@@ -1,0 +1,79 @@
+# Weekly city-pack build (docs/ARCHITECTURE.md: CI is the "backend").
+#
+# Downloads official GTFS feeds, compiles SQLite packs, rebuilds the
+# Metrô-DF community feed, assembles catalog.json, signs it with the
+# repo secret (ed25519), and replaces the assets of the rolling `packs`
+# release. The app verifies the catalog signature before trusting it.
+#
+# Map tiles (pmtiles) are NOT rebuilt here yet (needs Planetiler + an OSM
+# extract); the previous release's pmtiles are carried forward.
+name: packs
+
+on:
+  schedule:
+    - cron: '23 6 * * 0'  # Sunday 06:23 UTC (off the :00 herd)
+  workflow_dispatch:
+
+permissions:
+  contents: write  # upload release assets
+
+concurrency:
+  group: packs
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install signing dependency
+        run: pip install pynacl
+
+      - name: Build Metrô-DF community feed + Brasília pack
+        run: |
+          mkdir -p pipeline/tmp pipeline/dist
+          python3 pipeline/build_metro_df.py
+          python3 pipeline/compile_gtfs.py pipeline/tmp/metro_df_gtfs.zip \
+            -o pipeline/dist/brasilia.sqlite --city brasilia
+
+      - name: Fetch official Belo Horizonte GTFS
+        run: |
+          curl -fL --retry 3 -o pipeline/tmp/bh_gtfs.zip \
+            https://s3.amazonaws.com/mobilibus-uploads/gtfs/GTFSBHTRANS.zip
+
+      - name: Compile Belo Horizonte pack
+        run: |
+          python3 pipeline/compile_gtfs.py pipeline/tmp/bh_gtfs.zip \
+            -o pipeline/dist/belo_horizonte.sqlite --city belo_horizonte
+
+      - name: Carry forward map tiles from the current release
+        run: |
+          cd pipeline/dist
+          for city in brasilia belo_horizonte; do
+            curl -fsSL -o "$city.pmtiles" \
+              "https://github.com/$GITHUB_REPOSITORY/releases/download/packs/$city.pmtiles" \
+              || echo "no prior pmtiles for $city (catalog will omit it)"
+          done
+
+      - name: Assemble + sign catalog
+        env:
+          PACK_SIGNING_KEY: ${{ secrets.PACK_SIGNING_KEY }}
+        run: |
+          python3 pipeline/catalog.py pipeline/dist \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/packs"
+          python3 pipeline/sign.py sign pipeline/dist/catalog.json
+
+      - name: Publish rolling `packs` release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view packs --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create packs --repo "$GITHUB_REPOSITORY" \
+                 --title "City packs" \
+                 --notes "Rolling release: latest city packs + signed catalog."
+          gh release upload packs --repo "$GITHUB_REPOSITORY" --clobber \
+            pipeline/dist/*

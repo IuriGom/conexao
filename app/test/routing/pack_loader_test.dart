@@ -126,4 +126,42 @@ void main() {
     expect(tt.connections, hasLength(1));
     loader.close();
   });
+
+  test('routes() lists lines ordered by short name', () {
+    final loader = PackLoader(packPath);
+    final r = loader.routes();
+    expect(r.map((x) => x.shortName), ['100', 'L1']);
+    expect(r[1].routeType, 1);
+    loader.close();
+  });
+
+  test('stopsForRoute returns the canonical stop order per direction', () {
+    final loader = PackLoader(packPath);
+    expect(loader.routeDirections(1), [0]);
+    final stops = loader.stopsForRoute(1, 0);
+    expect(stops.map((s) => s.name),
+        ['Terminal Centro', 'Av. Sul 1200', 'Av. Sul 2400',
+         'Praça da Estação']);
+    loader.close();
+  });
+
+  test('nextDepartures honors service day and afterSecs', () {
+    final loader = PackLoader(packPath);
+    final fridayMorning =
+        loader.nextDepartures(1, friday, 7 * 3600, limit: 5);
+    expect(fridayMorning.map((d) => d.depSecs),
+        [8 * 3600, 9 * 3600]); // T1 08:00, T2 09:00
+    expect(fridayMorning.first.routeShortName, '100');
+
+    final afterT1 = loader.nextDepartures(1, friday, 8 * 3600 + 1);
+    expect(afterT1.map((d) => d.depSecs), [9 * 3600]);
+
+    // Sunday: only the metro (trip 203, stops 5-6) runs.
+    expect(loader.nextDepartures(1, sunday, 0), isEmpty);
+    final metro =
+        loader.nextDepartures(5, sunday, 9 * 3600, limit: 1);
+    expect(metro.single.depSecs, 10 * 3600);
+    expect(metro.single.isApproximate, isFalse);
+    loader.close();
+  });
 }

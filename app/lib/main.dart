@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'map/map_screen.dart';
 import 'map/offline_style.dart';
+import 'packs/pack_download.dart';
 import 'packs/pack_manager.dart';
 import 'planner/planner_screen.dart';
+import 'stops/lines_screen.dart';
+import 'stops/stops_screen.dart';
 
 void main() => runApp(const ConexaoApp());
 
@@ -93,8 +96,60 @@ extension on Coverage {
       };
 }
 
-class CityPickerScreen extends StatelessWidget {
+class CityPickerScreen extends StatefulWidget {
   const CityPickerScreen({super.key});
+
+  @override
+  State<CityPickerScreen> createState() => _CityPickerScreenState();
+}
+
+class _CityPickerScreenState extends State<CityPickerScreen> {
+  Set<String> _installed = {};
+  PackCatalog? _catalog;
+  String? _downloading; // city id currently downloading
+  double _progress = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final installed = await PackManager().installedCities();
+      if (mounted) setState(() => _installed = installed.toSet());
+    } catch (_) {/* storage unreadable: show as not installed */}
+    try {
+      final catalog = await PackCatalog.fetch();
+      if (mounted) setState(() => _catalog = catalog);
+    } catch (_) {/* offline or unverifiable catalog: hide download buttons */}
+  }
+
+  Future<void> _download(City city) async {
+    final entry = _catalog?.cities[city.id];
+    if (entry == null || _downloading != null) return;
+    setState(() {
+      _downloading = city.id;
+      _progress = 0;
+    });
+    try {
+      await downloadCity(entry, (recv, total) {
+        if (mounted && total > 0) {
+          setState(() => _progress = recv / total);
+        }
+      });
+      await _refresh();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Download falhou — verifique a conexão e '
+                'tente de novo. Nada foi instalado.')));
+      }
+    } finally {
+      if (mounted) setState(() => _downloading = null);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,16 +173,7 @@ class CityPickerScreen extends StatelessWidget {
                 title: Text(city.name),
                 subtitle: Text('${city.region}\n${city.note}'),
                 isThreeLine: true,
-                trailing: Chip(
-                  label: Text(
-                    city.coverage.label,
-                    style: const TextStyle(fontSize: 11, color: Colors.white),
-                  ),
-                  backgroundColor: city.coverage.color(cs),
-                  padding: EdgeInsets.zero,
-                  side: BorderSide.none,
-                  visualDensity: VisualDensity.compact,
-                ),
+                trailing: _trailing(city, cs),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => CityScreen(city: city)),
                 ),
@@ -135,6 +181,43 @@ class CityPickerScreen extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _trailing(City city, ColorScheme cs) {
+    if (_downloading == city.id) {
+      return SizedBox(
+        width: 64,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LinearProgressIndicator(value: _progress),
+            Text('${(_progress * 100).round()}%',
+                style: const TextStyle(fontSize: 11)),
+          ],
+        ),
+      );
+    }
+    if (!_installed.contains(city.id)) {
+      final entry = _catalog?.cities[city.id];
+      if (entry != null) {
+        final mb = (entry.totalSize / 1048576).toStringAsFixed(0);
+        return FilledButton.tonal(
+          onPressed: () => _download(city),
+          child: Text('Baixar\n$mb MB', textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11)),
+        );
+      }
+    }
+    return Chip(
+      label: Text(
+        city.coverage.label,
+        style: const TextStyle(fontSize: 11, color: Colors.white),
+      ),
+      backgroundColor: city.coverage.color(cs),
+      padding: EdgeInsets.zero,
+      side: BorderSide.none,
+      visualDensity: VisualDensity.compact,
     );
   }
 }
@@ -225,43 +308,17 @@ class CityScreen extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           children: [
             CityMapTab(city: city),
-            _placeholder(
-              Icons.place_outlined,
-              'Paradas próximas',
-              'Partidas tabeladas por parada, direto do pacote SQLite. '
-                  'Sem internet necessária.',
+            StopsScreen(
+              cityId: city.id,
+              refLat: city.centerLat,
+              refLon: city.centerLon,
             ),
-            _placeholder(
-              Icons.directions_bus_outlined,
-              'Linhas e horários',
-              'Ônibus, BRT, metrô, trem e VLT — itinerários completos '
-                  'e tabelas de horário offline.',
-            ),
+            LinesScreen(cityId: city.id),
             PlannerScreen(
               cityId: city.id,
               centerLat: city.centerLat,
               centerLon: city.centerLon,
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _placeholder(IconData icon, String title, String body) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
           ],
         ),
       ),

@@ -29,3 +29,6 @@ minisign.key
 # Editors
 .idea/
 .vscode/
+
+# pack build output (CI publishes these to the packs release)
+pipeline/dist/
