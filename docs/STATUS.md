@@ -1,7 +1,8 @@
-# STATUS — where we left off (2026-08-14)
+# STATUS — where we left off (2026-08-16)
 
 > Read this first when resuming. Working dir: `/Users/iuri/conexao`.
-> Repo: github.com/IuriGom/conexao (private, branch main).
+> Repo: github.com/IuriGom/conexao (**PUBLIC** since 2026-08-16 — pack
+> downloads need anonymous release access; maintainer approved), branch main.
 
 ## The project
 
@@ -28,12 +29,30 @@ Lead city: **Brasília** (user lives there); reference city: **Belo Horizonte**.
   Planner is now map-first: tap = origin pin, tap = dest pin.
   Tiles built locally: `pipeline/tmp/brasilia.pmtiles` (24 MB, whole DF),
   `pipeline/tmp/belo_horizonte.pmtiles` (10 MB, city bbox).
+## Done and verified (cont.)
+
+- **Paradas tab**: 25 nearest stops + next 3 departures today
+  (`pack_loader.allStops/nextDepartures`). Reference = city center or GPS fix.
+- **Linhas tab**: route list + per-direction stop diagrams
+  (`routes/routeDirections/stopsForRoute`).
+- **Pack download flow**: `packs/pack_download.dart` — signed catalog
+  (ed25519, pubkey baked in `PackCatalog.pubkeyB64`), sha256 per file,
+  atomic install, gzip decompress. City picker: Baixar button + progress.
+  First `packs` release live (brasilia.sqlite/.pmtiles, catalog+sig).
+- **Signing**: `pipeline/sign.py` (PyNaCl); secret ONLY in GH secret
+  PACK_SIGNING_KEY. Cross-impl signature test (PyNaCl↔cryptography).
+- **CI**: `.github/workflows/packs.yml` — weekly Sun 06:23 UTC + dispatch;
+  fetches BH GTFS, compiles both cities, gzips sqlite (224→65 MB), signs
+  catalog, `gh release upload --clobber`. First run green. SHA-pinned actions.
+- **My-location**: geolocator with `forceLocationManager` (no Play Services).
+  Blue dot + camera move; Paradas uses the fix as reference.
 - **Toolchain**: Flutter 3.47, **JDK 21** (maplibre_gl needs
   `sourceCompatibility 21`; `flutter config --jdk-dir` is now pinned to
   `/opt/homebrew/opt/openjdk@21`, which overrides JAVA_HOME for Gradle),
   Android SDK at `/opt/homebrew/share/android-commandlinetools`
   (ANDROID_HOME), NDK 28.2 already installed. Emulator AVD `conexao`
-  (Android 36 AOSP, no Google).
+  (Android 36 AOSP, no Google). Emulator is flaky under the task harness —
+  start it as a plain background process (`&`) instead.
 
 ## Data budget
 

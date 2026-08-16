@@ -80,5 +80,12 @@ jobs:
             || gh release create packs --repo "$GITHUB_REPOSITORY" \
                  --title "City packs" \
                  --notes "Rolling release: latest city packs + signed catalog."
+          # Drop assets that no longer exist in dist (stale packs).
+          for asset in $(gh release view packs --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name'); do
+            [ -f "pipeline/dist/$asset" ] || \
+              gh release delete-asset packs "$asset" \
+                --repo "$GITHUB_REPOSITORY" --yes
+          done
           gh release upload packs --repo "$GITHUB_REPOSITORY" --clobber \
             pipeline/dist/*
