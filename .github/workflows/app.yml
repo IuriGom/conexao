@@ -1,0 +1,29 @@
+# App CI: analyze + full test suite (incl. golden routes, which rebuild
+# the Brasília pack from source) on every push and PR.
+name: app
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - name: Pipeline tests (GTFS compiler)
+        run: python3 pipeline/test_compile_gtfs.py
+        working-directory: .

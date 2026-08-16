@@ -24,6 +24,10 @@ class TransitMap extends StatefulWidget {
   /// it changes (set after a my-location fix).
   final (double, double)? userPosition;
 
+  /// One-off camera target (e.g. a stop picked from search). The camera
+  /// animates to it whenever the value changes.
+  final (double, double)? focusPoint;
+
   const TransitMap({
     super.key,
     required this.styleJson,
@@ -33,6 +37,7 @@ class TransitMap extends StatefulWidget {
     this.pins = const [],
     this.onTap,
     this.userPosition,
+    this.focusPoint,
   });
 
   @override
@@ -78,6 +83,10 @@ class TransitMapState extends State<TransitMap> {
     final u = widget.userPosition;
     if (u != null && u != oldWidget.userPosition) {
       _controller?.animateCamera(CameraUpdate.newLatLng(LatLng(u.$1, u.$2)));
+    }
+    final f = widget.focusPoint;
+    if (f != null && f != oldWidget.focusPoint) {
+      _controller?.animateCamera(CameraUpdate.newLatLng(LatLng(f.$1, f.$2)));
     }
   }
 

@@ -28,6 +28,7 @@ import argparse
 import csv
 import sqlite3
 import sys
+import unicodedata
 import zipfile
 from pathlib import Path
 
@@ -305,22 +306,38 @@ def materialize_frequencies(cur, feed, trip_i):
     return made
 
 
+def _norm(text):
+    """Search normalization: NFKD, strip combining marks, lowercase.
+
+    Portuguese users type 'aguas' and mean 'Águas' — FTS5's trigram
+    tokenizer does not fold diacritics, so the index carries a normalized
+    column and the app normalizes queries the same way.
+    """
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(c)
+    ).lower()
+
+
 def build_search_index(cur):
     try:
         cur.execute(
-            "CREATE VIRTUAL TABLE search USING fts5(name, kind, ref_i "
+            "CREATE VIRTUAL TABLE search USING fts5(name, norm, kind, ref_i "
             "UNINDEXED, tokenize='trigram')")
     except sqlite3.OperationalError:
         cur.execute(
-            "CREATE VIRTUAL TABLE search USING fts5(name, kind, ref_i "
+            "CREATE VIRTUAL TABLE search USING fts5(name, norm, kind, ref_i "
             "UNINDEXED)")
-    cur.execute(
-        "INSERT INTO search SELECT name, 'stop', stop_i FROM stops "
-        "WHERE name IS NOT NULL AND location_type = 0")
-    cur.execute(
-        "INSERT INTO search SELECT "
-        "COALESCE(short_name,'') || ' ' || COALESCE(long_name,''), "
-        "'route', route_i FROM routes")
+    for name, kind, ref in cur.execute(
+            "SELECT name, 'stop', stop_i FROM stops "
+            "WHERE name IS NOT NULL AND location_type = 0").fetchall():
+        cur.execute("INSERT INTO search VALUES (?,?,?,?)",
+                    (name, _norm(name), kind, ref))
+    for name, ref in cur.execute(
+            "SELECT COALESCE(short_name,'') || ' ' || "
+            "COALESCE(long_name,''), route_i FROM routes").fetchall():
+        cur.execute("INSERT INTO search VALUES (?,?,?,?)",
+                    (name, _norm(name), "route", ref))
 
 
 def quality_gate(cur, counts):

@@ -130,10 +130,12 @@ def main():
             "WHERE t.trip_id='T_BUS_1' AND st.stop_sequence=3"), 90300)
     check("calendar", q("SELECT COUNT(*) FROM calendar"), 1)
     check("shape_pts", q("SELECT COUNT(*) FROM shape_pts"), 2)
-    check("search: 'Rodoviária' matches stop + route",
-          q("SELECT COUNT(*) FROM search WHERE search MATCH 'Rodoviária'"), 2)
+    check("search: 'Rodoviária' matches stop + route (display column)",
+          q("SELECT COUNT(*) FROM search WHERE name MATCH 'Rodoviária'"), 2)
+    check("search: unaccented 'rodoviaria' matches (diacritic folding)",
+          q("SELECT COUNT(*) FROM search WHERE norm MATCH 'rodoviaria'"), 2)
     check("search: route by number",
-          q("SELECT COUNT(*) FROM search WHERE search MATCH '\"0.102\"'"), 1)
+          q("SELECT COUNT(*) FROM search WHERE norm MATCH '\"0.102\"'"), 1)
     check("meta city_id",
           q("SELECT value FROM meta WHERE key='city_id'"), "testlandia")
 

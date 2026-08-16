@@ -4,6 +4,7 @@ import '../map/map_screen.dart';
 import '../map/offline_style.dart';
 import '../packs/pack_manager.dart';
 import '../routing/models.dart';
+import '../routing/pack_loader.dart';
 import '../routing/router_worker.dart';
 import 'journey_view.dart';
 
@@ -29,6 +30,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
   String? _styleJson;
   String? _packPath;
   RouterWorker? _worker;
+  PackLoader? _searchLoader; // main-isolate loader for FTS stop search
   bool _dayLoaded = false;
   bool _packMissing = false;
   bool _mapMissing = false;
@@ -37,6 +39,12 @@ class _PlannerScreenState extends State<PlannerScreen> {
   MapPin? _origin, _dest;
   Journey? _journey;
   bool _noResult = false;
+
+  final _originCtrl = TextEditingController();
+  final _destCtrl = TextEditingController();
+  bool _searchingOrigin = true; // which field the suggestions belong to
+  List<SearchHit> _hits = const [];
+  (double, double)? _focusPoint;
 
   @override
   void initState() {
@@ -55,6 +63,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
         return;
       }
       _packPath = transit.path;
+      _searchLoader = PackLoader(transit.path);
       _worker = await RouterWorker.spawn();
       if (map == null) {
         setState(() => _mapMissing = true);
@@ -73,12 +82,76 @@ class _PlannerScreenState extends State<PlannerScreen> {
   void _onTapMap(double lat, double lon) {
     setState(() {
       _journey = null;
+      _hits = const [];
       if (_origin == null) {
         _origin = MapPin(lat, lon, '#2E7D32'); // green
+        _originCtrl.text = 'Ponto no mapa';
       } else {
         _dest = MapPin(lat, lon, '#C62828'); // red
+        _destCtrl.text = 'Ponto no mapa';
       }
     });
+  }
+
+  void _search(String query, bool origin) {
+    final loader = _searchLoader;
+    if (loader == null || query.trim().length < 2) {
+      setState(() => _hits = const []);
+      return;
+    }
+    List<SearchHit> hits;
+    try {
+      hits = loader
+          .search(query, limit: 6)
+          .where((h) => h.kind == 'stop')
+          .toList();
+    } catch (_) {
+      hits = const []; // old pack without the norm column: no suggestions
+    }
+    setState(() {
+      _searchingOrigin = origin;
+      _hits = hits;
+    });
+  }
+
+  void _pick(SearchHit hit) {
+    final stop = _searchLoader?.stopByI(hit.refI);
+    if (stop == null) return;
+    setState(() {
+      _journey = null;
+      _hits = const [];
+      _focusPoint = (stop.lat, stop.lon);
+      if (_searchingOrigin) {
+        _origin = MapPin(stop.lat, stop.lon, '#2E7D32');
+        _originCtrl.text = stop.name;
+      } else {
+        _dest = MapPin(stop.lat, stop.lon, '#C62828');
+        _destCtrl.text = stop.name;
+      }
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  Widget _searchField(
+      TextEditingController ctrl, String hint, bool origin) {
+    return TextField(
+      controller: ctrl,
+      style: const TextStyle(fontSize: 13),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: hint,
+        prefixIcon: Icon(Icons.circle,
+            size: 10, color: origin ? Colors.green : Colors.red),
+        border: const OutlineInputBorder(),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      ),
+      onTap: () => setState(() {
+        _searchingOrigin = origin;
+        _hits = const [];
+      }),
+      onChanged: (v) => _search(v, origin),
+    );
   }
 
   Future<void> _plan() async {
@@ -110,16 +183,21 @@ class _PlannerScreenState extends State<PlannerScreen> {
     });
   }
 
-  void _clear() => setState(() {
-        _origin = null;
+  void _clear() => setState(() {        _origin = null;
         _dest = null;
         _journey = null;
         _noResult = false;
+        _hits = const [];
+        _originCtrl.clear();
+        _destCtrl.clear();
       });
 
   @override
   void dispose() {
     _worker?.close();
+    _searchLoader?.close();
+    _originCtrl.dispose();
+    _destCtrl.dispose();
     super.dispose();
   }
 
@@ -162,31 +240,60 @@ class _PlannerScreenState extends State<PlannerScreen> {
           centerLon: widget.centerLon,
           pins: pins,
           onTap: _onTapMap,
+          focusPoint: _focusPoint,
         ),
-        // Status + actions
+        // Search + status + actions
         Positioned(
           top: 8, left: 8, right: 8,
           child: Card(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Text(
-                      _origin == null
-                          ? 'Toque no mapa para marcar a origem'
-                          : _dest == null
-                              ? 'Agora toque para marcar o destino'
-                              : 'Origem e destino marcados',
-                      style: const TextStyle(fontSize: 13),
+                  _searchField(_originCtrl, 'Origem', true),
+                  const SizedBox(height: 4),
+                  _searchField(_destCtrl, 'Destino', false),
+                  if (_hits.isNotEmpty)
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final h in _hits)
+                            ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.place_outlined,
+                                  size: 18),
+                              title: Text(h.name,
+                                  style: const TextStyle(fontSize: 13)),
+                              onTap: () => _pick(h),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  TextButton(onPressed: _clear, child: const Text('Limpar')),
-                  FilledButton(
-                    onPressed: (_origin != null && _dest != null && !_busy)
-                        ? _plan
-                        : null,
-                    child: Text(_busy ? '…' : 'Planejar'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _origin == null
+                              ? 'Busque ou toque no mapa: origem'
+                              : _dest == null
+                                  ? 'Agora o destino'
+                                  : 'Origem e destino marcados',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      TextButton(
+                          onPressed: _clear, child: const Text('Limpar')),
+                      FilledButton(
+                        onPressed:
+                            (_origin != null && _dest != null && !_busy)
+                                ? _plan
+                                : null,
+                        child: Text(_busy ? '…' : 'Planejar'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -195,7 +302,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
         ),
         if (_busy)
           const Positioned(
-            top: 72, left: 8, right: 8,
+            top: 170, left: 8, right: 8,
             child: LinearProgressIndicator(),
           ),
         // Result

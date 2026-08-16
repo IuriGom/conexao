@@ -159,10 +159,24 @@ class PackLoader {
     ];
   }
 
+  /// Search normalization mirroring compile_gtfs.py's _norm: NFKD-fold
+  /// Portuguese diacritics and lowercase, so 'aguas' finds 'Águas'.
+  static String _norm(String text) {
+    const folds = {
+      'á': 'a', 'à': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a',
+      'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+      'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+      'ó': 'o', 'ò': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o',
+      'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+      'ç': 'c', 'ñ': 'n',
+    };
+    return text.toLowerCase().split('').map((c) => folds[c] ?? c).join();
+  }
+
   /// Full-text search over stops and routes (FTS5 index built by the  /// compiler; trigram when available = substring matching).
   /// Query terms are quoted, so arbitrary user input can't break FTS syntax.
   List<SearchHit> search(String query, {int limit = 20}) {
-    final terms = query
+    final terms = _norm(query)
         .trim()
         .split(RegExp(r'\s+'))
         .where((t) => t.isNotEmpty)
@@ -172,7 +186,7 @@ class PackLoader {
     return [
       for (final r in db.select(
           'SELECT kind, ref_i, name FROM search '
-          'WHERE search MATCH ? LIMIT ?', [terms, limit]))
+          'WHERE norm MATCH ? LIMIT ?', [terms, limit]))
         SearchHit(
           kind: r['kind'] as String,
           refI: r['ref_i'] as int,
